@@ -1,4 +1,4 @@
-/* ============================================================
+============================================================
    DIRETORIA DE REGULAÇÃO DO ACESSO – PROFISSIONAIS MÉDICOS ATIVOS
    style.css – v1.0
    ============================================================ */
@@ -477,9 +477,6 @@ body {
 .table-responsive {
   overflow-x: auto;
   border-radius: var(--radius-sm);
-  position: relative;
-  max-height: 70vh;
-  overflow-y: auto;
 }
 
 .data-table {
@@ -488,21 +485,11 @@ body {
   font-size: 0.82rem;
 }
 
-/* CORREÇÃO: CABEÇALHO CONGELADO (STICKY) */
-.data-table thead {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-}
-
 .data-table thead tr {
   background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
 }
 
 .data-table thead th {
-  position: sticky;
-  top: 85px; /* Altura do header fixo - ajuste conforme necessário */
-  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
   padding: 13px 14px;
   text-align: left;
   color: #fff;
@@ -513,9 +500,7 @@ body {
   cursor: pointer;
   user-select: none;
   transition: background var(--transition);
-  z-index: 20;
 }
-
 .data-table thead th:hover { background: rgba(255,255,255,0.1); }
 .data-table thead th i { margin-left: 5px; font-size: 0.7rem; opacity: 0.7; }
 
@@ -689,10 +674,6 @@ body {
   .search-box input { width: 140px; }
   .header-actions { gap: 8px; }
   .btn { padding: 8px 14px; font-size: 0.8rem; }
-  /* Ajuste do sticky para mobile - header menor */
-  .data-table thead th {
-    top: 70px;
-  }
 }
 
 @media (max-width: 480px) {
@@ -702,10 +683,6 @@ body {
   .header-actions { width: 100%; justify-content: flex-start; }
   .search-box input { width: 100px; }
   .kpi-value { font-size: 1.3rem; }
-  /* Ajuste do sticky para mobile muito pequeno */
-  .data-table thead th {
-    top: 110px;
-  }
 }
 
 /* ============================================================
