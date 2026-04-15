@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Profissionais Médicos Ativos – CMC</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+  <!-- ===================== HEADER ===================== -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="header-logo">
+        <div class="header-icon">
+          <i class="fas fa-user-md"></i>
+        </div>
+        <div class="header-titles">
+          <h1 class="header-main">DIRETORIA DE REGULAÇÃO DO ACESSO</h1>
+          <h2 class="header-sub">CMC – PROFISSIONAIS MÉDICOS ATIVOS</h2>
+          <div class="h-meta">
+            Superintendente: <b style="color:#bfdbfe">Yara Ariane M.S.Souza</b>
+            &nbsp;•&nbsp; Diretora: <b style="color:#bfdbfe">Paloma Morais</b>
+          </div>
+          <p class="header-ref">Referência do Setor: <strong>Enfermeira Giovanna</strong></p>
+          <p class="header-ref">Página criada por <strong>Ana P. A. Silva</strong> – Matric. 201704 | Assistente Adm. Diretoria de Regulação do Acesso</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <div class="status-badge">
+          <span class="status-dot"></span>
+          <span id="statusText">Conectando...</span>
+        </div>
+        <button class="btn btn-refresh" id="btnRefresh" onclick="loadData()">
+          <i class="fas fa-sync-alt" id="refreshIcon"></i> Atualizar
+        </button>
+        <button class="btn btn-excel" id="btnExcel" onclick="exportExcel()">
+          <i class="fas fa-file-excel"></i> Excel
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===================== LOADING ===================== -->
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="loading-box">
+      <div class="spinner"></div>
+      <p>Carregando dados das planilhas...</p>
+    </div>
+  </div>
+
+  <!-- ===================== MAIN CONTENT ===================== -->
+  <main class="main-content">
+
+    <!-- ===== FILTROS ===== -->
+    <section class="filters-section card">
+      <div class="filters-header">
+        <i class="fas fa-filter"></i>
+        <span>Filtros</span>
+        <button class="btn-clear-filters" onclick="clearFilters()">
+          <i class="fas fa-times"></i> Limpar filtros
+        </button>
+      </div>
+      <div class="filters-grid">
+        <div class="filter-group">
+          <label><i class="fas fa-user-md"></i> Profissional Médico</label>
+          <select id="filterProfissional" class="filter-select" onchange="applyFilters()">
+            <option value="">Todos</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label><i class="fas fa-building"></i> Unidade Executante</label>
+          <select id="filterUnidade" class="filter-select" onchange="applyFilters()">
+            <option value="">Todas</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label><i class="fas fa-stethoscope"></i> CBO</label>
+          <select id="filterCBO" class="filter-select" onchange="applyFilters()">
+            <option value="">Todos</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== KPI CARDS ===== -->
+    <section class="kpi-section">
+      <div class="kpi-card kpi-total-geral">
+        <div class="kpi-icon"><i class="fas fa-users-cog"></i></div>
+        <div class="kpi-info">
+          <p class="kpi-label">Total de Profissionais Ativos</p>
+          <h3 class="kpi-value" id="kpiTotalProfissionais">0</h3>
+        </div>
+      </div>
+      <div class="kpi-card kpi-mes-atual">
+        <div class="kpi-icon"><i class="fas fa-hospital"></i></div>
+        <div class="kpi-info">
+          <p class="kpi-label">Unidades Executantes</p>
+          <h3 class="kpi-value" id="kpiUnidades">0</h3>
+        </div>
+      </div>
+      <div class="kpi-card kpi-proximo-mes">
+        <div class="kpi-icon"><i class="fas fa-id-card-alt"></i></div>
+        <div class="kpi-info">
+          <p class="kpi-label">CBOs Distintos</p>
+          <h3 class="kpi-value" id="kpiCBOs">0</h3>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== TABELA ===== -->
+    <section class="table-section card">
+      <div class="table-header">
+        <div class="table-title-group">
+          <i class="fas fa-table"></i>
+          <h4>Profissionais Médicos Ativos por Unidade</h4>
+        </div>
+        <div class="table-controls">
+          <div class="search-box">
+            <i class="fas fa-search"></i>
+            <input type="text" id="tableSearch" placeholder="Buscar..." oninput="filterTable()" />
+          </div>
+          <select id="tablePageSize" class="filter-select small-select" onchange="renderTable()">
+            <option value="15">15 por página</option>
+            <option value="25">25 por página</option>
+            <option value="50">50 por página</option>
+            <option value="100">100 por página</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table class="data-table" id="mainTable">
+          <thead>
+            <tr>
+              <th onclick="sortTable(0)">Profissional <i class="fas fa-sort"></i></th>
+              <th onclick="sortTable(1)">Unidade Executante <i class="fas fa-sort"></i></th>
+              <th onclick="sortTable(2)">CBO <i class="fas fa-sort"></i></th>
+              <th onclick="sortTable(3)">Especialidade <i class="fas fa-sort"></i></th>
+              <th onclick="sortTable(4)">Último Mês de Atendimento <i class="fas fa-sort"></i></th>
+            </tr>
+          </thead>
+          <tbody id="tableBody">
+            <tr><td colspan="5" class="empty-msg">Aguardando dados...</td></tr>
+          </tbody>
+          <tfoot id="tableFoot"></tfoot>
+        </table>
+      </div>
+      <div class="table-footer">
+        <span id="tablePaginationInfo">Mostrando 0 registros</span>
+        <div class="pagination" id="pagination"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <p>Diretoria de Regulação do Acesso – Prefeitura Municipal de Contagem</p>
+    <p id="lastUpdate">Última atualização: –</p>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
