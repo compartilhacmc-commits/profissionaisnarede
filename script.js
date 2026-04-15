@@ -123,7 +123,7 @@ async function fetchSheet(sheet) {
 }
 
 // ============================================================
-// CARREGAR DADOS DAS DUAS PLANILHAS
+// CARREGANDO DADOS DAS DUAS PLANILHAS
 // ============================================================
 async function loadData() {
   showLoading(true);
@@ -298,7 +298,7 @@ function animateCount(id, target) {
 }
 
 // ============================================================
-// CONSTRUIR TABELA – agrupado por profissional + unidade
+// Agrupado por profissional + unidade
 // Calcula o ÚLTIMO MÊS de atendimento (DATA AGENDA mais recente)
 // ============================================================
 function buildTableData() {
@@ -385,7 +385,7 @@ function sortTable(col) {
 }
 
 // ============================================================
-// RENDERIZAR TABELA
+// TABELA
 // ============================================================
 function renderTable() {
   const pageSize = parseInt(document.getElementById('tablePageSize')?.value || 15);
