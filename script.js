@@ -1,20 +1,13 @@
 'use strict';
 
 // ============================================================
-// CONFIGURAÇÕES DAS DUAS PLANILHAS
+// CONFIGURAÇÃO DA PLANILHA
 // ============================================================
-const SHEETS = [
-  {
-    id: '1puNbYysRBj-5CY6fhnHNnYd9OH96cl7guMFBOLeYZV4',
-    gid: '1698493941',
-    label: 'Planilha 1'
-  },
-  {
-    id: '14DiFK9EW36s8ntkukyhiRMJxcX0ghG5XTzWb1TwpI2Q',
-    gid: '0',
-    label: 'Planilha 2'
-  }
-];
+const SHEET = {
+  id: '16CXd1TVf2IfTDiPzRCxUNWk6rCRoEw6WDfcybVoarnA',
+  gid: '1407399146',
+  label: 'Planilha Principal'
+};
 
 const MESES_PT = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
                   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
@@ -102,13 +95,13 @@ async function fetchCsvText(url) {
   return await resp.text();
 }
 
-async function fetchSheet(sheet) {
-  const gviz   = `https://docs.google.com/spreadsheets/d/${sheet.id}/gviz/tq?tqx=out:csv&gid=${sheet.gid}`;
-  const export_ = `https://docs.google.com/spreadsheets/d/${sheet.id}/export?format=csv&gid=${sheet.gid}`;
+async function fetchSheet() {
+  const gviz   = `https://docs.google.com/spreadsheets/d/${SHEET.id}/gviz/tq?tqx=out:csv&gid=${SHEET.gid}`;
+  const export_ = `https://docs.google.com/spreadsheets/d/${SHEET.id}/export?format=csv&gid=${SHEET.gid}`;
 
   let text = await fetchCsvText(gviz);
   if (looksLikeHtml(text)) text = await fetchCsvText(export_);
-  if (looksLikeHtml(text)) throw new Error(`Planilha ${sheet.label}: resposta HTML (verifique permissões).`);
+  if (looksLikeHtml(text)) throw new Error(`Planilha ${SHEET.label}: resposta HTML (verifique permissões).`);
 
   return new Promise((resolve, reject) => {
     Papa.parse(text, {
@@ -116,14 +109,14 @@ async function fetchSheet(sheet) {
       skipEmptyLines: true,
       dynamicTyping: false,
       transformHeader: h => h.trim(),
-      complete: r => resolve({ rows: r.data, label: sheet.label }),
+      complete: r => resolve({ rows: r.data, label: SHEET.label }),
       error: e => reject(e)
     });
   });
 }
 
 // ============================================================
-// CARREGANDO DADOS DAS DUAS PLANILHAS
+// CARREGANDO DADOS DA PLANILHA...
 // ============================================================
 async function loadData() {
   showLoading(true);
@@ -132,29 +125,14 @@ async function loadData() {
   if (icon) icon.classList.add('spinning');
 
   try {
-    // Busca as duas planilhas em paralelo
-    const results = await Promise.allSettled(SHEETS.map(s => fetchSheet(s)));
-
-    let combined = [];
-    let erros = [];
-
-    results.forEach((res, i) => {
-      if (res.status === 'fulfilled') {
-        combined = combined.concat(normalizeRows(res.value.rows, res.value.label));
-      } else {
-        erros.push(`${SHEETS[i].label}: ${res.reason?.message || 'Erro desconhecido'}`);
-      }
-    });
-
-    if (combined.length === 0) {
-      throw new Error('Nenhum dado carregado. ' + erros.join(' | '));
+    const result = await fetchSheet();
+    const normalized = normalizeRows(result.rows, result.label);
+    
+    if (normalized.length === 0) {
+      throw new Error('Nenhum dado carregado da planilha.');
     }
 
-    if (erros.length > 0) {
-      showWarning('Atenção: ' + erros.join(' | '));
-    }
-
-    allData = combined;
+    allData = normalized;
     populateFilterOptions();
     applyFilters();
     setStatus(`Conectado (${allData.length.toLocaleString('pt-BR')} registros)`, true);
@@ -163,6 +141,7 @@ async function loadData() {
   } catch (err) {
     console.error(err);
     showError('Erro ao carregar dados: ' + err.message);
+    setStatus('Erro', false);
   }
 
   showLoading(false);
@@ -170,7 +149,7 @@ async function loadData() {
 }
 
 // ============================================================
-// NORMALIZAR LINHAS
+// LINHAS NORMALIZADAS...
 // ============================================================
 function normalizeRows(rows, fonte) {
   return rows.map(row => {
@@ -186,7 +165,7 @@ function normalizeRows(rows, fonte) {
     };
 
     const unidadeExec  = (get('UNIDADE EXECUTANTE') || '').toString().trim();
-    const nomeCBO      = get('NOME CBO', 'CODIGO CBO', 'CÓDIGIO CBO');
+    const nomeCBO      = get('NOME CBO', 'CODIGO CBO', 'CÓDIGO CBO');
     const especialidade = get('ESPECIALIDADE');
     const profissional = formatProfissional(get('NOME PROFISSIONAL'));
     const cbo          = formatCBO(nomeCBO);
@@ -207,7 +186,7 @@ function normalizeRows(rows, fonte) {
 }
 
 // ============================================================
-// POPULAR FILTROS
+// POPULAR FILTROS...
 // ============================================================
 function populateFilterOptions() {
   const profissionais = [...new Set(allData.map(r => r.profissional).filter(Boolean))].sort();
@@ -235,7 +214,7 @@ function populateSelect(id, values) {
 }
 
 // ============================================================
-// APLICAR FILTROS
+// APLICAR FILTROS...
 // ============================================================
 function applyFilters() {
   const fProfissional = document.getElementById('filterProfissional')?.value || '';
@@ -264,14 +243,11 @@ function clearFilters() {
 }
 
 // ============================================================
-// KPIs
+// KPIs...
 // ============================================================
 function updateKPIs() {
-  // Profissionais únicos
   const profissionaisUnicos = new Set(filteredData.map(r => r.profissional)).size;
-  // Unidades únicas
   const unidadesUnicas = new Set(filteredData.map(r => r.unidadeExecutante)).size;
-  // CBOs únicos
   const cbosUnicos = new Set(filteredData.map(r => r.cbo).filter(Boolean)).size;
 
   animateCount('kpiTotalProfissionais', profissionaisUnicos);
@@ -302,7 +278,6 @@ function animateCount(id, target) {
 // Calcula o ÚLTIMO MÊS de atendimento (DATA AGENDA mais recente)
 // ============================================================
 function buildTableData() {
-  // Chave: profissional + unidade executante
   const map = {};
 
   filteredData.forEach(r => {
@@ -321,11 +296,9 @@ function buildTableData() {
 
     const entry = map[key];
 
-    // Atualiza a data mais recente
     if (r.dataAgenda) {
       if (!entry.ultimaData || r.dataAgenda > entry.ultimaData) {
         entry.ultimaData = r.dataAgenda;
-        // Atualiza cbo/especialidade da linha mais recente
         if (r.cbo) entry.cbo = r.cbo;
         if (r.especialidade) entry.especialidade = r.especialidade;
       }
@@ -341,7 +314,6 @@ function buildTableData() {
     fontesStr: [...e.fontes].join(', ')
   }));
 
-  // Ordena: profissionais com data mais recente primeiro
   tableData.sort((a, b) => b.ultimoMesKey - a.ultimoMesKey || a.profissional.localeCompare(b.profissional, 'pt-BR'));
 
   tableSearched = [...tableData];
@@ -410,7 +382,6 @@ function renderTable() {
     tfoot.innerHTML = '';
   } else {
     tbody.innerHTML = slice.map(r => {
-      // Classifica o badge do mês
       let badgeClass = '';
       if (r.ultimoMesKey >= mesAtualKey) badgeClass = 'recente';
       else if (r.ultimoMesKey >= mesAnteriorKey) badgeClass = '';
@@ -548,7 +519,8 @@ function autoSizeColumns(ws, data) {
 // UTILITÁRIOS UI
 // ============================================================
 function showLoading(show) {
-  document.getElementById('loadingOverlay')?.classList.toggle('hidden', !show);
+  const overlay = document.getElementById('loadingOverlay');
+  if (overlay) overlay.classList.toggle('hidden', !show);
 }
 
 function setStatus(msg, ok) {
@@ -570,20 +542,6 @@ function showError(msg) {
     display:flex;align-items:center;gap:10px;max-width:420px;
   `;
   toast.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${msg}`;
-  document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 8000);
-}
-
-function showWarning(msg) {
-  const toast = document.createElement('div');
-  toast.style.cssText = `
-    position:fixed;bottom:24px;right:24px;z-index:9998;
-    background:#e67e22;color:#fff;border-radius:12px;
-    padding:14px 22px;font-family:Inter,sans-serif;font-size:.85rem;
-    font-weight:600;box-shadow:0 6px 24px rgba(0,0,0,.3);
-    display:flex;align-items:center;gap:10px;max-width:420px;
-  `;
-  toast.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${msg}`;
   document.body.appendChild(toast);
   setTimeout(() => toast.remove(), 8000);
 }
