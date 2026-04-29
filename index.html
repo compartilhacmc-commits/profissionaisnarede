@@ -79,7 +79,7 @@
           </select>
         </div>
         <div class="filter-group">
-          <label><i class="fas fa-stethoscope"></i> CBO</label>
+          <label><i class="fas fa-stethoscope"></i> Especialidade (CBO)</label>
           <select id="filterCBO" class="filter-select" onchange="applyFilters()">
             <option value="">Todos</option>
           </select>
@@ -106,7 +106,7 @@
       <div class="kpi-card kpi-proximo-mes">
         <div class="kpi-icon"><i class="fas fa-id-card-alt"></i></div>
         <div class="kpi-info">
-          <p class="kpi-label">CBOs Distintos</p>
+          <p class="kpi-label">Especialidades Distintas</p>
           <h3 class="kpi-value" id="kpiCBOs">0</h3>
         </div>
       </div>
@@ -138,13 +138,16 @@
             <tr>
               <th onclick="sortTable(0)">Profissional <i class="fas fa-sort"></i></th>
               <th onclick="sortTable(1)">Unidade Executante <i class="fas fa-sort"></i></th>
-              <th onclick="sortTable(2)">CBO <i class="fas fa-sort"></i></th>
-              <th onclick="sortTable(3)">Especialidade <i class="fas fa-sort"></i></th>
-              <th onclick="sortTable(4)">Último Mês de Atendimento <i class="fas fa-sort"></i></th>
+              <th onclick="sortTable(2)">Código Unidade <i class="fas fa-sort"></i></th>
+              <th onclick="sortTable(3)">Unidade Solicitante <i class="fas fa-sort"></i></th>
+              <th onclick="sortTable(4)">Distrito <i class="fas fa-sort"></i></th>
+              <th onclick="sortTable(5)">Especialidade (CBO) <i class="fas fa-sort"></i></th>
+              <th onclick="sortTable(6)">Tipo Especialidade <i class="fas fa-sort"></i></th>
+              <th onclick="sortTable(7)">Último Mês de Atendimento <i class="fas fa-sort"></i></th>
             </tr>
           </thead>
           <tbody id="tableBody">
-            <tr><td colspan="5" class="empty-msg">Aguardando dados...</td></tr>
+            <tr><td colspan="8" class="empty-msg">Aguardando dados...</td></tr>
           </tbody>
           <tfoot id="tableFoot"></tfoot>
         </table>
