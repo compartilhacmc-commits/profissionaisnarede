@@ -22,6 +22,8 @@ let tableSearched = []; // após busca
 let currentPage = 1;
 let sortColIdx = -1;
 let sortAscFlag = true;
+let currentSortKey = 'ultimoMesKey'; // Chave padrão para ordenação
+
 
 // ============================================================
 // UTILITÁRIOS
@@ -43,15 +45,9 @@ function titleCase(str) {
   }).join(' ');
 }
 
-function formatCBO(nomeCBO) {
-  if (!nomeCBO) return '';
-  let name = nomeCBO.toString().trim();
-  name = name.replace(/^M[eé]dico[:\-\s]*/i, '').trim();
-  return titleCase(name);
-}
-
 function formatProfissional(nome) {
   if (!nome) return '';
+  // Remove números iniciais como "123 - " e aplica Title Case
   return titleCase(nome.toString().trim().replace(/^\d+\s*[-–]?\s*/, '').trim());
 }
 
@@ -62,6 +58,7 @@ function fmt(n) {
 function parseDate(str) {
   if (!str) return null;
   str = str.toString().trim();
+  // Tenta formatos DD/MM/AAAA ou AAAA-MM-DD
   let m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
   if (m) return new Date(+m[3], +m[2] - 1, +m[1]);
   m = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -70,12 +67,12 @@ function parseDate(str) {
 }
 
 function mesLabel(date) {
-  if (!date) return '';
+  if (!date || !(date instanceof Date) || isNaN(date)) return '';
   return MESES_PT[date.getMonth()] + '/' + date.getFullYear();
 }
 
 function mesKey(date) {
-  if (!date) return 0;
+  if (!date || !(date instanceof Date) || isNaN(date)) return 0;
   return date.getFullYear() * 100 + date.getMonth();
 }
 
@@ -116,7 +113,7 @@ async function fetchSheet() {
 }
 
 // ============================================================
-// CARREGANDO DADOS DA PLANILHA...
+// CARREGANDO DADOS DA PLANILHA (NORMALIZAÇÃO DAS NOVAS COLUNAS)
 // ============================================================
 async function loadData() {
   showLoading(true);
@@ -129,7 +126,7 @@ async function loadData() {
     const normalized = normalizeRows(result.rows, result.label);
     
     if (normalized.length === 0) {
-      throw new Error('Nenhum dado carregado da planilha.');
+      throw new Error('Nenhum dado carregado da planilha. Verifique os nomes das colunas.');
     }
 
     allData = normalized;
@@ -149,13 +146,16 @@ async function loadData() {
 }
 
 // ============================================================
-// LINHAS NORMALIZADAS...
+// NORMALIZAÇÃO: MAPEANDO AS NOVAS COLUNAS
 // ============================================================
 function normalizeRows(rows, fonte) {
   return rows.map(row => {
+    // Função auxiliar para buscar valores nas colunas, ignorando case e acentos
     const get = (...keys) => {
       for (const k of keys) {
+        // Busca exata primeiro
         if (row[k] !== undefined && row[k] !== null && row[k] !== '') return row[k];
+        // Busca normalizada (sem acentos/case)
         const kn = norm(k);
         for (const [rk, rv] of Object.entries(row)) {
           if (norm(rk) === kn && rv !== undefined && rv !== null && rv !== '') return rv;
@@ -164,44 +164,73 @@ function normalizeRows(rows, fonte) {
       return '';
     };
 
-    const unidadeExec  = (get('UNIDADE EXECUTANTE') || '').toString().trim();
-    const nomeCBO      = get('NOME CBO', 'CODIGO CBO', 'CÓDIGO CBO');
-    const especialidade = get('ESPECIALIDADE');
-    const profissional = formatProfissional(get('NOME PROFISSIONAL'));
-    const cbo          = formatCBO(nomeCBO);
-    const dataAgendaStr = get('DATA AGENDA', 'DATA_AGENDA');
-    const dataAgenda   = parseDate(dataAgendaStr);
+    // --- Mapeamento das novas colunas ---
+    const profissionalRaw = get('PROFISSIONAL', 'NOME PROFISSIONAL');
+    const profissional = formatProfissional(profissionalRaw);
+    
+    const unidadeExecutante = get('UNIDADE EXECUTANTE', 'UNIDADE EXECUTANTE').toString().trim();
+    const codigoUnidade = get('CÓDIGO UNIDADE EXECUTANTE', 'CÓDIGO UNIDADE').toString().trim();
+    const unidadeSolicitante = get('UNIDADE SOLICITANTE').toString().trim();
+    const distrito = get('DISTRITO').toString().trim();
+    const especialidadeCBO = get('Especialidade (CBO)', 'ESPECIALIDADE CBO', 'CBO').toString().trim();
+    const tipoEspecialidade = get('TIPO ESPECIALIDADE', 'TIPO').toString().trim();
+    
+    // DATA DA AGENDA é crucial para o último mês
+    const dataAgendaStr = get('DATA DA AGENDA', 'DATA_AGENDA');
+    const dataAgenda = parseDate(dataAgendaStr);
+    
+    // Outros campos opcionais (manter para compatibilidade ou debug)
+    const tipoAtendimento = get('TIPO DE ATENDIMENTO');
+    const situacao = get('SITUAÇÃO');
+    const operador = get('OPERADOR');
+    const tipoServico = get('TIPO DE SERVIÇO');
+    const mesAgendamento = get('MÊS DE AGENDAMENTO');
+
+    // Filtro básico: deve ter pelo menos profissional e unidade executante para ser útil
+    if (!profissional || !unidadeExecutante) return null;
 
     return {
-      unidadeExecutante: unidadeExec,
-      cbo,
-      nomeCBO,
-      especialidade: especialidade ? titleCase(especialidade.toString()) : '',
+      // Campos principais que serão exibidos ou usados nos filtros
       profissional,
+      unidadeExecutante,
+      codigoUnidade,
+      unidadeSolicitante,
+      distrito,
+      especialidadeCBO,
+      tipoEspecialidade,
+      
+      // Campo de data para calcular o último atendimento
       dataAgenda,
       dataAgendaStr,
-      fonte
+      
+      // Metadados
+      fonte,
+      
+      // Guardar outros campos para possível uso futuro
+      _raw: { tipoAtendimento, situacao, operador, tipoServico, mesAgendamento }
     };
-  }).filter(r => r.profissional && r.unidadeExecutante);
+  }).filter(r => r !== null); // Remove linhas inválidas
 }
 
 // ============================================================
-// POPULAR FILTROS...
+// POPULAR FILTROS (com base nas novas colunas)
 // ============================================================
 function populateFilterOptions() {
-  const profissionais = [...new Set(allData.map(r => r.profissional).filter(Boolean))].sort();
-  const unidades      = [...new Set(allData.map(r => r.unidadeExecutante).filter(Boolean))].sort();
-  const cbos          = [...new Set(allData.map(r => r.cbo).filter(Boolean))].sort();
+  const profissionais = [...new Set(allData.map(r => r.profissional).filter(Boolean))].sort((a,b) => a.localeCompare(b, 'pt-BR'));
+  const unidades      = [...new Set(allData.map(r => r.unidadeExecutante).filter(Boolean))].sort((a,b) => a.localeCompare(b, 'pt-BR'));
+  // Filtro principal agora usa 'especialidadeCBO' que é o texto da especialidade
+  const especialidades = [...new Set(allData.map(r => r.especialidadeCBO).filter(Boolean))].sort((a,b) => a.localeCompare(b, 'pt-BR'));
 
   populateSelect('filterProfissional', profissionais);
   populateSelect('filterUnidade', unidades);
-  populateSelect('filterCBO', cbos);
+  populateSelect('filterCBO', especialidades); // O terceiro filtro agora é por Especialidade
 }
 
 function populateSelect(id, values) {
   const sel = document.getElementById(id);
   if (!sel) return;
   const current = sel.value;
+  // Limpa opções antigas, mantendo o placeholder "Todos"
   while (sel.options.length > 1) sel.remove(1);
   values.forEach(v => {
     if (!v) return;
@@ -214,17 +243,17 @@ function populateSelect(id, values) {
 }
 
 // ============================================================
-// APLICAR FILTROS...
+// APLICAR FILTROS
 // ============================================================
 function applyFilters() {
   const fProfissional = document.getElementById('filterProfissional')?.value || '';
   const fUnidade      = document.getElementById('filterUnidade')?.value || '';
-  const fCBO          = document.getElementById('filterCBO')?.value || '';
+  const fEspecialidade = document.getElementById('filterCBO')?.value || ''; // agora é especialidade
 
   filteredData = allData.filter(r => {
     if (fProfissional && r.profissional !== fProfissional) return false;
     if (fUnidade && r.unidadeExecutante !== fUnidade) return false;
-    if (fCBO && r.cbo !== fCBO) return false;
+    if (fEspecialidade && r.especialidadeCBO !== fEspecialidade) return false;
     return true;
   });
 
@@ -243,16 +272,17 @@ function clearFilters() {
 }
 
 // ============================================================
-// KPIs...
+// ATUALIZAÇÃO DOS CARDS (KPIs)
 // ============================================================
 function updateKPIs() {
   const profissionaisUnicos = new Set(filteredData.map(r => r.profissional)).size;
   const unidadesUnicas = new Set(filteredData.map(r => r.unidadeExecutante)).size;
-  const cbosUnicos = new Set(filteredData.map(r => r.cbo).filter(Boolean)).size;
+  // KPI de CBOs agora conta especialidades distintas
+  const especialidadesUnicas = new Set(filteredData.map(r => r.especialidadeCBO).filter(Boolean)).size;
 
   animateCount('kpiTotalProfissionais', profissionaisUnicos);
   animateCount('kpiUnidades', unidadesUnicas);
-  animateCount('kpiCBOs', cbosUnicos);
+  animateCount('kpiCBOs', especialidadesUnicas);
 }
 
 function animateCount(id, target) {
@@ -274,90 +304,131 @@ function animateCount(id, target) {
 }
 
 // ============================================================
-// Agrupado por profissional + unidade
-// Calcula o ÚLTIMO MÊS de atendimento (DATA AGENDA mais recente)
+// AGRUPAMENTO: PROFISSIONAL + UNIDADE EXECUTANTE (com as novas colunas)
+// CALCULA O ÚLTIMO MÊS DE ATENDIMENTO BASEADO EM 'DATA DA AGENDA'
 // ============================================================
 function buildTableData() {
-  const map = {};
+  const map = new Map(); // Usar Map para melhor performance
 
   filteredData.forEach(r => {
+    // Chave de agrupamento: Profissional + Unidade Executante
     const key = `${r.profissional}|||${r.unidadeExecutante}`;
 
-    if (!map[key]) {
-      map[key] = {
+    if (!map.has(key)) {
+      map.set(key, {
         profissional: r.profissional,
         unidadeExecutante: r.unidadeExecutante,
-        cbo: r.cbo,
-        especialidade: r.especialidade,
+        codigoUnidade: r.codigoUnidade,
+        unidadeSolicitante: r.unidadeSolicitante,
+        distrito: r.distrito,
+        especialidadeCBO: r.especialidadeCBO,
+        tipoEspecialidade: r.tipoEspecialidade,
         ultimaData: null,
         fontes: new Set()
-      };
+      });
     }
 
-    const entry = map[key];
+    const entry = map.get(key);
 
+    // Atualiza a data mais recente
     if (r.dataAgenda) {
       if (!entry.ultimaData || r.dataAgenda > entry.ultimaData) {
         entry.ultimaData = r.dataAgenda;
-        if (r.cbo) entry.cbo = r.cbo;
-        if (r.especialidade) entry.especialidade = r.especialidade;
+        // Opcional: Atualizar outros campos com base no registro mais recente
+        if (r.especialidadeCBO) entry.especialidadeCBO = r.especialidadeCBO;
+        if (r.tipoEspecialidade) entry.tipoEspecialidade = r.tipoEspecialidade;
+        if (r.codigoUnidade) entry.codigoUnidade = r.codigoUnidade;
+        if (r.unidadeSolicitante) entry.unidadeSolicitante = r.unidadeSolicitante;
+        if (r.distrito) entry.distrito = r.distrito;
       }
     }
 
     entry.fontes.add(r.fonte);
   });
 
-  tableData = Object.values(map).map(e => ({
+  // Converte o Map para array e adiciona os campos calculados
+  tableData = Array.from(map.values()).map(e => ({
     ...e,
     ultimoMes: mesLabel(e.ultimaData),
     ultimoMesKey: mesKey(e.ultimaData),
     fontesStr: [...e.fontes].join(', ')
   }));
 
+  // Ordenação inicial: mais recente primeiro, depois por profissional
   tableData.sort((a, b) => b.ultimoMesKey - a.ultimoMesKey || a.profissional.localeCompare(b.profissional, 'pt-BR'));
 
   tableSearched = [...tableData];
 }
 
 // ============================================================
-// FILTRO DE BUSCA NA TABELA
+// FILTRO DE BUSCA NA TABELA (inclui as novas colunas)
 // ============================================================
 function filterTable() {
-  const q = (document.getElementById('tableSearch')?.value || '').toLowerCase();
-  tableSearched = !q
-    ? [...tableData]
-    : tableData.filter(r =>
-        (r.profissional || '').toLowerCase().includes(q) ||
-        (r.unidadeExecutante || '').toLowerCase().includes(q) ||
-        (r.cbo || '').toLowerCase().includes(q) ||
-        (r.especialidade || '').toLowerCase().includes(q) ||
-        (r.ultimoMes || '').toLowerCase().includes(q)
-      );
+  const q = (document.getElementById('tableSearch')?.value || '').toLowerCase().trim();
+  if (!q) {
+    tableSearched = [...tableData];
+  } else {
+    tableSearched = tableData.filter(r =>
+      (r.profissional || '').toLowerCase().includes(q) ||
+      (r.unidadeExecutante || '').toLowerCase().includes(q) ||
+      (r.codigoUnidade || '').toLowerCase().includes(q) ||
+      (r.unidadeSolicitante || '').toLowerCase().includes(q) ||
+      (r.distrito || '').toLowerCase().includes(q) ||
+      (r.especialidadeCBO || '').toLowerCase().includes(q) ||
+      (r.tipoEspecialidade || '').toLowerCase().includes(q) ||
+      (r.ultimoMes || '').toLowerCase().includes(q)
+    );
+  }
   currentPage = 1;
   renderTable();
 }
 
 // ============================================================
-// ORDENAÇÃO
+// ORDENAÇÃO DA TABELA
 // ============================================================
 function sortTable(col) {
-  if (sortColIdx === col) sortAscFlag = !sortAscFlag;
-  else { sortColIdx = col; sortAscFlag = true; }
-
-  const keys = ['profissional', 'unidadeExecutante', 'cbo', 'especialidade', 'ultimoMesKey'];
+  // Mapeamento do índice da coluna para a chave no objeto
+  const keys = [
+    'profissional',
+    'unidadeExecutante',
+    'codigoUnidade',
+    'unidadeSolicitante',
+    'distrito',
+    'especialidadeCBO',
+    'tipoEspecialidade',
+    'ultimoMesKey' // Ordena pela data do último mês
+  ];
+  
+  if (sortColIdx === col) {
+    sortAscFlag = !sortAscFlag;
+  } else {
+    sortColIdx = col;
+    sortAscFlag = true;
+  }
   const key = keys[col];
 
   tableSearched.sort((a, b) => {
-    const va = a[key] ?? '';
-    const vb = b[key] ?? '';
-    const cmp = typeof va === 'number' ? va - vb : va.toString().localeCompare(vb.toString(), 'pt-BR');
+    let va = a[key] ?? '';
+    let vb = b[key] ?? '';
+    
+    // Tratamento especial para números (ultimoMesKey)
+    if (key === 'ultimoMesKey') {
+      const cmp = (va || 0) - (vb || 0);
+      return sortAscFlag ? cmp : -cmp;
+    }
+    
+    // Para strings, comparação com locale
+    va = va.toString();
+    vb = vb.toString();
+    const cmp = va.localeCompare(vb, 'pt-BR', { sensitivity: 'base' });
     return sortAscFlag ? cmp : -cmp;
   });
+  
   renderTable();
 }
 
 // ============================================================
-// TABELA
+// RENDERIZAÇÃO DA TABELA COM AS NOVAS COLUNAS
 // ============================================================
 function renderTable() {
   const pageSize = parseInt(document.getElementById('tablePageSize')?.value || 15);
@@ -378,7 +449,7 @@ function renderTable() {
     : hoje.getFullYear() * 100 + (hoje.getMonth() - 1);
 
   if (slice.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5" class="empty-msg">Nenhum registro encontrado.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="empty-msg">Nenhum registro encontrado.</td></tr>`;
     tfoot.innerHTML = '';
   } else {
     tbody.innerHTML = slice.map(r => {
@@ -395,17 +466,16 @@ function renderTable() {
 
       return `
         <tr>
-          <td><span class="nome-profissional">${r.profissional || '–'}</span></td>
-          <td><span class="nome-unidade">${r.unidadeExecutante || '–'}</span></td>
-          <td>
-            <div class="cbo-cell">${r.cbo || '–'}</div>
-          </td>
-          <td>
-            <div class="esp-cell">${r.especialidade || '–'}</div>
-          </td>
+          <td><span class="nome-profissional">${escapeHtml(r.profissional) || '–'}</span></td>
+          <td><span class="nome-unidade">${escapeHtml(r.unidadeExecutante) || '–'}</span></td>
+          <td>${escapeHtml(r.codigoUnidade) || '–'}</td>
+          <td>${escapeHtml(r.unidadeSolicitante) || '–'}</td>
+          <td>${escapeHtml(r.distrito) || '–'}</td>
+          <td><div class="cbo-cell">${escapeHtml(r.especialidadeCBO) || '–'}</div></td>
+          <td>${escapeHtml(r.tipoEspecialidade) || '–'}</td>
           <td>
             ${r.ultimoMes
-              ? `<span class="badge-mes ${badgeClass}">${icone} ${r.ultimoMes}</span>`
+              ? `<span class="badge-mes ${badgeClass}">${icone} ${escapeHtml(r.ultimoMes)}</span>`
               : '<span style="color:#aaa;font-size:0.8rem">Sem data</span>'
             }
           </td>
@@ -413,9 +483,10 @@ function renderTable() {
       `;
     }).join('');
 
+    // Rodapé com total
     tfoot.innerHTML = `
       <tr>
-        <td colspan="4"><i class="fas fa-calculator" style="margin-right:6px"></i>
+        <td colspan="7"><i class="fas fa-calculator" style="margin-right:6px"></i>
           TOTAL: ${fmt(tableSearched.length)} profissional(is) / unidade(s)
         </td>
         <td></td>
@@ -423,10 +494,24 @@ function renderTable() {
     `;
   }
 
-  document.getElementById('tablePaginationInfo').textContent =
-    `Mostrando ${total === 0 ? 0 : start + 1} a ${Math.min(start + pageSize, total)} de ${fmt(total)} registros`;
-
+  const infoEl = document.getElementById('tablePaginationInfo');
+  if (infoEl) {
+    infoEl.textContent = `Mostrando ${total === 0 ? 0 : start + 1} a ${Math.min(start + pageSize, total)} de ${fmt(total)} registros`;
+  }
   renderPagination(currentPage, pages);
+}
+
+// Função auxiliar para evitar XSS
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/[&<>]/g, function(m) {
+    if (m === '&') return '&amp;';
+    if (m === '<') return '&lt;';
+    if (m === '>') return '&gt;';
+    return m;
+  }).replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, function(c) {
+    return c;
+  });
 }
 
 // ============================================================
@@ -467,7 +552,7 @@ function goPage(p) {
 }
 
 // ============================================================
-// EXPORTAR EXCEL
+// EXPORTAR EXCEL (com as novas colunas)
 // ============================================================
 function exportExcel() {
   if (!tableData.length) { alert('Nenhum dado para exportar.'); return; }
@@ -481,10 +566,12 @@ function exportExcel() {
       const wsData = tableSearched.map(r => ({
         'Profissional': r.profissional,
         'Unidade Executante': r.unidadeExecutante,
-        'CBO': r.cbo,
-        'Especialidade': r.especialidade,
-        'Último Mês de Atendimento': r.ultimoMes || 'Sem data',
-        'Fontes': r.fontesStr
+        'Código Unidade Executante': r.codigoUnidade,
+        'Unidade Solicitante': r.unidadeSolicitante,
+        'Distrito': r.distrito,
+        'Especialidade (CBO)': r.especialidadeCBO,
+        'Tipo Especialidade': r.tipoEspecialidade,
+        'Último Mês de Atendimento': r.ultimoMes || 'Sem data'
       }));
 
       const wb = XLSX.utils.book_new();
