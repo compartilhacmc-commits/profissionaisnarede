@@ -81,7 +81,7 @@
         <div class="filter-group">
           <label><i class="fas fa-stethoscope"></i> Especialidade (CBO)</label>
           <select id="filterCBO" class="filter-select" onchange="applyFilters()">
-            <option value="">Todos</option>
+            <option value="">Todas</option>
           </select>
         </div>
       </div>
@@ -138,16 +138,15 @@
             <tr>
               <th onclick="sortTable(0)">Profissional <i class="fas fa-sort"></i></th>
               <th onclick="sortTable(1)">Unidade Executante <i class="fas fa-sort"></i></th>
-              <th onclick="sortTable(2)">Código Unidade <i class="fas fa-sort"></i></th>
-              <th onclick="sortTable(3)">Unidade Solicitante <i class="fas fa-sort"></i></th>
-              <th onclick="sortTable(4)">Distrito <i class="fas fa-sort"></i></th>
-              <th onclick="sortTable(5)">Especialidade (CBO) <i class="fas fa-sort"></i></th>
-              <th onclick="sortTable(6)">Tipo Especialidade <i class="fas fa-sort"></i></th>
-              <th onclick="sortTable(7)">Último Mês de Atendimento <i class="fas fa-sort"></i></th>
+              <th onclick="sortTable(2)">Unidade Solicitante <i class="fas fa-sort"></i></th>
+              <th onclick="sortTable(3)">Distrito <i class="fas fa-sort"></i></th>
+              <th onclick="sortTable(4)">Especialidade (CBO) <i class="fas fa-sort"></i></th>
+              <th onclick="sortTable(5)">Tipo Especialidade <i class="fas fa-sort"></i></th>
+              <th onclick="sortTable(6)">Último Mês de Atendimento <i class="fas fa-sort"></i></th>
             </tr>
           </thead>
           <tbody id="tableBody">
-            <tr><td colspan="8" class="empty-msg">Aguardando dados...</td></tr>
+            <tr><td colspan="7" class="empty-msg">Aguardando dados...</td></tr>
           </tbody>
           <tfoot id="tableFoot"></tfoot>
         </table>
